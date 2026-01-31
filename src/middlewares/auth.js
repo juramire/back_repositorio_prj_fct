@@ -16,9 +16,13 @@ export const requireAuth = (req, res, next) => {
   }
 };
 
-export const requireAdmin = (req, res, next) => {
-  if (!req.user || req.user.rol !== 'admin') {
+export const requireRole = roles => (req, res, next) => {
+  const allowed = Array.isArray(roles) ? roles : [roles];
+  if (!req.user || !allowed.includes(req.user.rol)) {
     return res.status(403).json({ message: 'Forbidden' });
   }
   return next();
 };
+
+// Compat alias para código existente
+export const requireAdmin = requireRole(['profesor', 'admin']);

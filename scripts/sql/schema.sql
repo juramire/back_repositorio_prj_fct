@@ -15,7 +15,7 @@ CREATE TABLE users (
   name VARCHAR(100) NOT NULL,
   email VARCHAR(150) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  rol ENUM('user','admin') NOT NULL DEFAULT 'user',
+  rol ENUM('user','profesor','admin') NOT NULL DEFAULT 'user',
   ciclo_id INT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -33,15 +33,18 @@ CREATE TABLE proyectos (
   curso_academico VARCHAR(20) NOT NULL,
   tags TEXT NOT NULL,
   alumnos TEXT NOT NULL,
-  status ENUM('DRAFT','SUBMITTED','PUBLISHED') NOT NULL DEFAULT 'DRAFT',
+  status ENUM('NOT_SEND','SUBMITTED','PUBLISHED') NOT NULL DEFAULT 'NOT_SEND',
   video_url VARCHAR(500) NULL,
   pdf_urls JSON NULL,
+  last_modified_by INT NULL,
+  last_modified_at DATETIME NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   submitted_at DATETIME NULL,
   published_at DATETIME NULL,
   CONSTRAINT fk_proyectos_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_proyectos_ciclo FOREIGN KEY (ciclo_id) REFERENCES ciclos_formativos(id),
+  CONSTRAINT fk_proyectos_last_modified_by FOREIGN KEY (last_modified_by) REFERENCES users(id),
   INDEX idx_title (title),
   INDEX idx_curso (curso_academico),
   INDEX idx_ciclo (ciclo_id),
@@ -63,6 +66,20 @@ CREATE TABLE incidencias (
   CONSTRAINT fk_incidencias_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE proyectos_history (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  proyecto_id BIGINT NOT NULL,
+  user_id INT NULL,
+  action ENUM('CREATE','UPDATE','DELETE','STATUS_CHANGE') NOT NULL,
+  diff JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ph_proyecto (proyecto_id),
+  INDEX idx_ph_user (user_id),
+  CONSTRAINT fk_ph_proyecto FOREIGN KEY (proyecto_id) REFERENCES proyectos(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ph_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 -- Usuario administrador de ejemplo (sustituye <hash> por un bcrypt real)
--- INSERT INTO users (name, email, password_hash, rol)
--- VALUES ('Admin', 'admin@example.com', '<hash>', 'admin');
+-- INSERT INTO users (name, email, password_hash, rol) VALUES
+-- ('Profesor Demo', 'profesor@example.com', '<hash>', 'profesor'),
+-- ('Admin Demo', 'admin@example.com', '<hash>', 'admin');

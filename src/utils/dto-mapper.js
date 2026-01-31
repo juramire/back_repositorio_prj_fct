@@ -42,6 +42,17 @@ const baseProyecto = row => ({
   tags: tagsFromString(row.tags),
   alumnos: row.alumnos ?? '',
   status: row.status,
+  submittedAt: row.submitted_at?.toISOString?.() ?? row.submitted_at ?? null,
+  publishedAt: row.published_at?.toISOString?.() ?? row.published_at ?? null,
+  lastModifiedAt: row.last_modified_at?.toISOString?.() ?? row.last_modified_at ?? null,
+  lastModifiedBy: row.last_modified_by ?? null,
+  lastModifiedByUser: row.last_modified_by
+    ? {
+        id: row.last_modified_by,
+        name: row.last_modified_by_name ?? null,
+        email: row.last_modified_by_email ?? null
+      }
+    : null,
   createdAt: row.created_at?.toISOString?.() ?? row.created_at,
   updatedAt: row.updated_at?.toISOString?.() ?? row.updated_at
 });
