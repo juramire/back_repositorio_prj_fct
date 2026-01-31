@@ -13,6 +13,8 @@ import proyectoRoutes from './modules/proyectos/proyectos.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
 import uploadRoutes from './modules/uploads/uploads.routes.js';
 import healthRoutes from './modules/health/health.routes.js';
+import ciclosRoutes from './modules/ciclos/ciclos.routes.js';
+import incidenciasRoutes from './modules/incidencias/incidencias.routes.js';
 import { errorHandler } from './middlewares/error-handler.js';
 
 const app = express();
@@ -56,6 +58,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/proyectos', proyectoRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/ciclos', ciclosRoutes);
+app.use('/api/incidencias', incidenciasRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Not Found' });

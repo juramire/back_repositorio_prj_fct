@@ -6,14 +6,23 @@ import { toUserDTO } from '../../utils/dto-mapper.js';
 
 export const findUserByEmail = async email => {
   const [rows] = await pool.execute(
-    'SELECT id, name, email, rol, password_hash FROM users WHERE email = ? LIMIT 1',
+    `SELECT u.id, u.name, u.email, u.rol, u.ciclo_id, c.descripcion AS ciclo_formativo, u.password_hash
+     FROM users u
+     LEFT JOIN ciclos_formativos c ON c.id = u.ciclo_id
+     WHERE u.email = ? LIMIT 1`,
     [email]
   );
   return rows[0];
 };
 
 export const findUserById = async id => {
-  const [rows] = await pool.execute('SELECT id, name, email, rol FROM users WHERE id = ? LIMIT 1', [id]);
+  const [rows] = await pool.execute(
+    `SELECT u.id, u.name, u.email, u.rol, u.ciclo_id, c.descripcion AS ciclo_formativo
+     FROM users u
+     LEFT JOIN ciclos_formativos c ON c.id = u.ciclo_id
+     WHERE u.id = ? LIMIT 1`,
+    [id]
+  );
   return rows[0];
 };
 

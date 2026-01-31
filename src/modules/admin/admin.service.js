@@ -9,7 +9,7 @@ const buildSearch = (q, params) => {
   if (!q) return '';
   const like = `%${q}%`;
   params.push(like, like, like);
-  return '(title LIKE ? OR descripcion LIKE ? OR tags LIKE ?)';
+  return '(p.title LIKE ? OR p.descripcion LIKE ? OR p.tags LIKE ?)';
 };
 
 export const listAdmin = async query => {
@@ -21,8 +21,15 @@ export const listAdmin = async query => {
     params.push(sanitizeString(query.curso));
   }
   if (query.ciclo) {
-    whereParts.push('ciclo_formativo = ?');
-    params.push(sanitizeString(query.ciclo));
+    const ciclo = sanitizeString(query.ciclo);
+    const num = Number(ciclo);
+    if (Number.isInteger(num) && num > 0) {
+      whereParts.push('p.ciclo_id = ?');
+      params.push(num);
+    } else {
+      whereParts.push('LOWER(c.descripcion) = ?');
+      params.push(ciclo.toLowerCase());
+    }
   }
   if (query.status) {
     whereParts.push('status = ?');
@@ -36,16 +43,17 @@ export const listAdmin = async query => {
   const where = 'WHERE ' + whereParts.join(' AND ');
 
   const sqlList = mysql.format(
-    `SELECT id, user_id, title, descripcion, resumen, ciclo_formativo, curso_academico, tags, alumnos, status, video_url, pdf_urls, created_at, updated_at
-     FROM proyectos
+    `SELECT p.id, p.user_id, p.title, p.descripcion, p.resumen, p.ciclo_id, c.descripcion AS ciclo_formativo, p.curso_academico, p.tags, p.alumnos, p.status, p.video_url, p.pdf_urls, p.created_at, p.updated_at
+     FROM proyectos p
+     JOIN ciclos_formativos c ON c.id = p.ciclo_id
      ${where}
-     ORDER BY created_at DESC
+     ORDER BY p.created_at DESC
      LIMIT ? OFFSET ?`,
     [...params, pageSize, offset]
   );
   const [rows] = await pool.query(sqlList);
 
-  const sqlCount = mysql.format(`SELECT COUNT(*) as total FROM proyectos ${where}`, params);
+  const sqlCount = mysql.format(`SELECT COUNT(*) as total FROM proyectos p JOIN ciclos_formativos c ON c.id=p.ciclo_id ${where}`, params);
   const [[{ total }]] = await pool.query(sqlCount);
   return { items: rows.map(toProyectoDTO), total, page, pageSize };
 };

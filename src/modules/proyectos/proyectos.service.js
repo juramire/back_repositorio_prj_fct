@@ -4,24 +4,44 @@ import { toProyectoDTO, toProyectoPublicDTO } from '../../utils/dto-mapper.js';
 import { sanitizeString, sanitizeTags } from '../../utils/sanitize.js';
 import { parsePagination } from '../../utils/pagination.js';
 
+const findCicloId = async cicloInput => {
+  if (cicloInput === undefined || cicloInput === null) return null;
+  const num = Number(cicloInput);
+  if (Number.isInteger(num) && num > 0) return num;
+  const desc = sanitizeString(cicloInput);
+  if (!desc) return null;
+  const [rows] = await pool.execute(
+    'SELECT id FROM ciclos_formativos WHERE LOWER(descripcion) = ? LIMIT 1',
+    [desc.toLowerCase()]
+  );
+  return rows[0]?.id ?? null;
+};
+
 const buildSearchClause = (q, params) => {
   if (!q) return '';
   const like = `%${q}%`;
   params.push(like, like, like);
-  return '(title LIKE ? OR descripcion LIKE ? OR tags LIKE ?)';
+  return '(p.title LIKE ? OR p.descripcion LIKE ? OR p.tags LIKE ?)';
 };
 
 export const listPublic = async query => {
   const { page, pageSize, offset } = parsePagination(query, { page: 1, pageSize: 9, maxPageSize: 50 });
   const params = [];
-  const whereParts = ['status = "PUBLISHED"'];
+  const whereParts = ['p.status = "PUBLISHED"'];
   if (query.curso) {
-    whereParts.push('curso_academico = ?');
+    whereParts.push('p.curso_academico = ?');
     params.push(sanitizeString(query.curso));
   }
   if (query.ciclo) {
-    whereParts.push('ciclo_formativo = ?');
-    params.push(sanitizeString(query.ciclo));
+    const ciclo = sanitizeString(query.ciclo);
+    const num = Number(ciclo);
+    if (Number.isInteger(num) && num > 0) {
+      whereParts.push('p.ciclo_id = ?');
+      params.push(num);
+    } else {
+      whereParts.push('LOWER(c.descripcion) = ?');
+      params.push(ciclo.toLowerCase());
+    }
   }
   if (query.q) {
     const clause = buildSearchClause(sanitizeString(query.q), params);
@@ -30,24 +50,30 @@ export const listPublic = async query => {
   const where = whereParts.length ? 'WHERE ' + whereParts.join(' AND ') : '';
 
   const sqlList = mysql.format(
-    `SELECT id, title, descripcion, resumen, ciclo_formativo, curso_academico, tags, alumnos, status, video_url, pdf_urls, created_at, updated_at
-     FROM proyectos
+    `SELECT p.id, p.title, p.descripcion, p.resumen, p.ciclo_id, c.descripcion AS ciclo_formativo, p.curso_academico, p.tags, p.alumnos, p.status, p.video_url, p.pdf_urls, p.created_at, p.updated_at
+     FROM proyectos p
+     JOIN ciclos_formativos c ON c.id = p.ciclo_id
      ${where}
-     ORDER BY created_at DESC
+     ORDER BY p.created_at DESC
      LIMIT ? OFFSET ?`,
     [...params, pageSize, offset]
   );
   const [rows] = await pool.query(sqlList);
 
-  const sqlCount = mysql.format(`SELECT COUNT(*) as total FROM proyectos ${where}`, params);
+  const sqlCount = mysql.format(
+    `SELECT COUNT(*) as total FROM proyectos p JOIN ciclos_formativos c ON c.id = p.ciclo_id ${where}`,
+    params
+  );
   const [[{ total }]] = await pool.query(sqlCount);
   return { items: rows.map(toProyectoPublicDTO), total, page, pageSize };
 };
 
 export const getPublicById = async id => {
   const [rows] = await pool.execute(
-    `SELECT id, title, descripcion, resumen, ciclo_formativo, curso_academico, tags, alumnos, status, video_url, pdf_urls, created_at, updated_at
-     FROM proyectos WHERE id = ? AND status = "PUBLISHED" LIMIT 1`,
+    `SELECT p.id, p.title, p.descripcion, p.resumen, p.ciclo_id, c.descripcion AS ciclo_formativo, p.curso_academico, p.tags, p.alumnos, p.status, p.video_url, p.pdf_urls, p.created_at, p.updated_at
+     FROM proyectos p
+     JOIN ciclos_formativos c ON c.id = p.ciclo_id
+     WHERE p.id = ? AND p.status = "PUBLISHED" LIMIT 1`,
     [id]
   );
   return rows[0] ? toProyectoPublicDTO(rows[0]) : null;
@@ -55,8 +81,10 @@ export const getPublicById = async id => {
 
 export const getByUser = async userId => {
   const [rows] = await pool.execute(
-    `SELECT id, user_id, title, descripcion, resumen, ciclo_formativo, curso_academico, tags, alumnos, status, video_url, pdf_urls, created_at, updated_at
-     FROM proyectos WHERE user_id = ? LIMIT 1`,
+    `SELECT p.id, p.user_id, p.title, p.descripcion, p.resumen, p.ciclo_id, c.descripcion AS ciclo_formativo, p.curso_academico, p.tags, p.alumnos, p.status, p.video_url, p.pdf_urls, p.created_at, p.updated_at
+     FROM proyectos p
+     JOIN ciclos_formativos c ON c.id = p.ciclo_id
+     WHERE p.user_id = ? LIMIT 1`,
     [userId]
   );
   return rows[0] ? toProyectoDTO(rows[0]) : null;
@@ -64,8 +92,10 @@ export const getByUser = async userId => {
 
 export const getById = async id => {
   const [rows] = await pool.execute(
-    `SELECT id, user_id, title, descripcion, resumen, ciclo_formativo, curso_academico, tags, alumnos, status, video_url, pdf_urls, created_at, updated_at
-     FROM proyectos WHERE id = ? LIMIT 1`,
+    `SELECT p.id, p.user_id, p.title, p.descripcion, p.resumen, p.ciclo_id, c.descripcion AS ciclo_formativo, p.curso_academico, p.tags, p.alumnos, p.status, p.video_url, p.pdf_urls, p.created_at, p.updated_at
+     FROM proyectos p
+     JOIN ciclos_formativos c ON c.id = p.ciclo_id
+     WHERE p.id = ? LIMIT 1`,
     [id]
   );
   return rows[0] ? toProyectoDTO(rows[0]) : null;
@@ -75,12 +105,13 @@ export const createProyecto = async (userId, body) => {
   const title = sanitizeString(body.title);
   const descripcion = sanitizeString(body.descripcion);
   const resumen = sanitizeString(body.resumen);
-  const cicloFormativo = sanitizeString(body.cicloFormativo);
+  const cicloInput = body.cicloId ?? body.cicloFormativo ?? body.ciclo_formativo ?? body.ciclo;
+  const cicloId = await findCicloId(cicloInput);
   const cursoAcademico = sanitizeString(body.cursoAcademico);
   const tags = sanitizeTags(body.tags);
   const alumnos = sanitizeString(body.alumnos ?? '');
 
-  if (!title || !descripcion || !resumen || !cicloFormativo || !cursoAcademico) {
+  if (!title || !descripcion || !resumen || !cicloId || !cursoAcademico) {
     const err = new Error('Campos requeridos faltantes');
     err.status = 400;
     throw err;
@@ -94,9 +125,9 @@ export const createProyecto = async (userId, body) => {
   const now = new Date();
   const [result] = await pool.execute(
     `INSERT INTO proyectos
-     (user_id, title, descripcion, resumen, ciclo_formativo, curso_academico, tags, alumnos, status, created_at, updated_at)
+     (user_id, title, descripcion, resumen, ciclo_id, curso_academico, tags, alumnos, status, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, "DRAFT", ?, ?)`,
-    [userId, title, descripcion, resumen, cicloFormativo, cursoAcademico, tags.join(', '), alumnos, now, now]
+    [userId, title, descripcion, resumen, cicloId, cursoAcademico, tags.join(', '), alumnos, now, now]
   );
   return getById(result.insertId);
 };
@@ -122,12 +153,13 @@ export const updateProyecto = async (id, userId, body, { allowAdmin = false } = 
   const title = sanitizeString(body.title);
   const descripcion = sanitizeString(body.descripcion);
   const resumen = sanitizeString(body.resumen);
-  const cicloFormativo = sanitizeString(body.cicloFormativo);
+  const cicloInput = body.cicloId ?? body.cicloFormativo ?? body.ciclo_formativo ?? body.ciclo;
+  const cicloId = cicloInput !== undefined ? await findCicloId(cicloInput) : proyecto.cicloId;
   const cursoAcademico = sanitizeString(body.cursoAcademico);
   const tags = sanitizeTags(body.tags);
   const alumnos = sanitizeString(body.alumnos ?? '');
 
-  if (!title || !descripcion || !resumen || !cicloFormativo || !cursoAcademico) {
+  if (!title || !descripcion || !resumen || !cicloId || !cursoAcademico) {
     const err = new Error('Campos requeridos faltantes');
     err.status = 400;
     throw err;
@@ -139,10 +171,10 @@ export const updateProyecto = async (id, userId, body, { allowAdmin = false } = 
 
   await pool.execute(
     `UPDATE proyectos
-     SET title = ?,
+         SET title = ?,
          descripcion = ?,
          resumen = ?,
-         ciclo_formativo = ?,
+         ciclo_id = ?,
          curso_academico = ?,
          tags = ?,
          alumnos = ?,
@@ -155,7 +187,7 @@ export const updateProyecto = async (id, userId, body, { allowAdmin = false } = 
       title,
       descripcion,
       resumen,
-      cicloFormativo,
+      cicloId,
       cursoAcademico,
       tags.join(', '),
       alumnos || proyecto.alumnos || '',

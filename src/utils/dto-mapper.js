@@ -2,7 +2,9 @@ export const toUserDTO = row => ({
   id: row.id,
   name: row.name,
   email: row.email,
-  rol: row.rol
+  rol: row.rol,
+  ciclo: row.ciclo_formativo ?? null,
+  cicloId: row.ciclo_id ?? null
 });
 
 const tagsFromString = raw =>
@@ -35,6 +37,7 @@ const baseProyecto = row => ({
   descripcion: row.descripcion,
   resumen: row.resumen,
   cicloFormativo: row.ciclo_formativo,
+  cicloId: row.ciclo_id ?? null,
   cursoAcademico: row.curso_academico,
   tags: tagsFromString(row.tags),
   alumnos: row.alumnos ?? '',
